@@ -33,6 +33,19 @@ Railway gives you a live URL like `lyricflow-production.up.railway.app`
 
 ---
 
+## Zero-code quick use
+
+1. Open the app in browser.
+2. Upload your MP3/MP4 song.
+3. Click **Generate Content**.
+4. Pick platform tab (Reels/Shorts/Post/Twitter).
+5. Click **Play song** in preview to watch lyrics sync.
+6. Download thumbnail PNG, copy caption/title/hashtags, and export `.lrc` lyrics file.
+
+> If `ANTHROPIC_API_KEY` is missing, LyricFlow runs in **demo mode** with auto-generated sample output so you can still use and test the full flow.
+
+---
+
 ## Run locally
 
 ```bash

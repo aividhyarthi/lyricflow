@@ -44,6 +44,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [step, setStep] = useState<'upload' | 'result'>('upload')
+  const [analyzeMode, setAnalyzeMode] = useState<'ai' | 'fallback' | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const handleFileSelect = useCallback((f: File) => {
@@ -51,6 +52,7 @@ export default function Home() {
     setError('')
     setSongInfo(null)
     setStep('upload')
+    setAnalyzeMode(null)
     setCurrentTime(0)
     setIsPlaying(false)
     if (audioRef.current) {
@@ -77,6 +79,7 @@ export default function Home() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to analyse')
       setSongInfo(json.data)
+      setAnalyzeMode(json.mode || null)
       setStep('result')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -123,7 +126,7 @@ export default function Home() {
         <div className="ml-auto flex items-center gap-3">
           {step === 'result' && (
             <button
-              onClick={() => { setStep('upload'); setSongInfo(null); setFile(null); }}
+              onClick={() => { setStep('upload'); setSongInfo(null); setFile(null); setAnalyzeMode(null); }}
               className="text-sm px-4 py-1.5 rounded-lg transition-all"
               style={{ border: '1px solid var(--border2)', color: 'var(--muted)' }}>
               ← New song
@@ -280,7 +283,7 @@ export default function Home() {
 
               {/* Re-generate */}
               <button
-                onClick={() => { setStep('upload'); setSongInfo(null); setFile(null); }}
+                onClick={() => { setStep('upload'); setSongInfo(null); setFile(null); setAnalyzeMode(null); }}
                 className="w-full py-2.5 rounded-xl text-sm font-medium transition-all"
                 style={{ border: '1px solid var(--border2)', background: 'transparent', color: 'var(--muted)' }}>
                 ← Upload a different song
@@ -323,6 +326,11 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+              {analyzeMode === 'fallback' && (
+                <div className="mx-5 mt-3 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(250,204,21,0.12)', border: '1px solid rgba(250,204,21,0.35)', color: '#fde68a' }}>
+                  Running in demo mode (no AI key configured). Add <code>ANTHROPIC_API_KEY</code> for fully AI-generated outputs.
+                </div>
+              )}
               <div className="flex-1 flex items-center justify-center p-6 overflow-hidden">
                 <ThumbnailCanvas
                   songInfo={songInfo!}
