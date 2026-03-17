@@ -25,9 +25,10 @@ type Props = {
   profilePhoto: string
   handle: string
   audioRef: RefObject<HTMLAudioElement>
+  currentTime: number
 }
 
-export default function ThumbnailCanvas({ songInfo, platform, thumbStyle, profilePhoto, handle, audioRef }: Props) {
+export default function ThumbnailCanvas({ songInfo, platform, thumbStyle, profilePhoto, handle, audioRef, currentTime }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -211,16 +212,28 @@ export default function ThumbnailCanvas({ songInfo, platform, thumbStyle, profil
                 {songInfo.songName}
               </div>
               <div className="space-y-0.5 mb-2">
-                {songInfo.lyrics.slice(0, 3).map((line, i) => (
-                  <div key={i} className={`text-xs leading-relaxed transition-all ${i === 1 ? 'text-white font-semibold lyric-active' : ''}`}
-                    style={{ color: i === 1 ? '#fff' : 'rgba(255,255,255,0.45)', textShadow: i === 1 ? '0 0 12px rgba(246,192,38,0.5)' : undefined }}>
-                    {line}
-                  </div>
-                ))}
+                {(() => {
+                  const timed = songInfo.timedLyrics || []
+                  const activeTimedIndex = timed.length > 0
+                    ? Math.max(0, timed.findIndex((line, idx) => currentTime >= line.time && (timed[idx + 1] ? currentTime < timed[idx + 1].time : true)))
+                    : -1
+                  const activeIndex = activeTimedIndex >= 0 ? activeTimedIndex : Math.floor((currentTime / Math.max(audioRef.current?.duration || 180, 1)) * Math.max(songInfo.lyrics.length, 1))
+                  const start = Math.max(activeIndex - 1, 0)
+                  const rows = (timed.length > 0 ? timed.map((line) => line.text) : songInfo.lyrics).slice(start, start + 3)
+                  return rows.map((line, i) => {
+                    const isActive = i === Math.min(1, rows.length - 1)
+                    return (
+                      <div key={`${line}-${i}`} className={`text-xs leading-relaxed transition-all ${isActive ? 'text-white font-semibold lyric-active' : ''}`}
+                        style={{ color: isActive ? '#fff' : 'rgba(255,255,255,0.45)', textShadow: isActive ? '0 0 12px rgba(246,192,38,0.5)' : undefined }}>
+                        {line}
+                      </div>
+                    )
+                  })
+                })()}
               </div>
               {/* Mini progress */}
               <div className="h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }}>
-                <div className="h-full rounded-full w-1/3" style={{ background: '#fff' }} />
+                <div className="h-full rounded-full" style={{ background: '#fff', width: `${Math.min(100, ((currentTime || 0) / Math.max(audioRef.current?.duration || 180, 1)) * 100)}%` }} />
               </div>
             </div>
           </div>

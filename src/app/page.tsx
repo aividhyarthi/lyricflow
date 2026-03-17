@@ -16,8 +16,10 @@ export type SongInfo = {
   mood: string
   artist: string
   lyrics: string[]
+  timedLyrics?: Array<{ time: number; text: string }>
   caption: string
   platforms: Record<string, string>
+  socialPack?: Record<string, { title: string; description: string; hashtags: string[] }>
 }
 
 export type Platform = 'reels' | 'shorts' | 'post' | 'twitter'
@@ -39,7 +41,10 @@ export default function Home() {
   const [songInfo, setSongInfo] = useState<SongInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [currentTime, setCurrentTime] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
   const [step, setStep] = useState<'upload' | 'result'>('upload')
+  const [analyzeMode, setAnalyzeMode] = useState<'ai' | 'fallback' | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const handleFileSelect = useCallback((f: File) => {
@@ -47,6 +52,9 @@ export default function Home() {
     setError('')
     setSongInfo(null)
     setStep('upload')
+    setAnalyzeMode(null)
+    setCurrentTime(0)
+    setIsPlaying(false)
     if (audioRef.current) {
       audioRef.current.src = URL.createObjectURL(f)
       audioRef.current.load()
@@ -60,12 +68,18 @@ export default function Home() {
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, captionLanguage: captionLang }),
+        body: (() => {
+          const form = new FormData()
+          form.append('songFile', file)
+          form.append('filename', file.name)
+          form.append('captionLanguage', captionLang)
+          return form
+        })(),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to analyse')
       setSongInfo(json.data)
+      setAnalyzeMode(json.mode || null)
       setStep('result')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -112,7 +126,7 @@ export default function Home() {
         <div className="ml-auto flex items-center gap-3">
           {step === 'result' && (
             <button
-              onClick={() => { setStep('upload'); setSongInfo(null); setFile(null); }}
+              onClick={() => { setStep('upload'); setSongInfo(null); setFile(null); setAnalyzeMode(null); }}
               className="text-sm px-4 py-1.5 rounded-lg transition-all"
               style={{ border: '1px solid var(--border2)', color: 'var(--muted)' }}>
               ← New song
@@ -269,7 +283,7 @@ export default function Home() {
 
               {/* Re-generate */}
               <button
-                onClick={() => { setStep('upload'); setSongInfo(null); setFile(null); }}
+                onClick={() => { setStep('upload'); setSongInfo(null); setFile(null); setAnalyzeMode(null); }}
                 className="w-full py-2.5 rounded-xl text-sm font-medium transition-all"
                 style={{ border: '1px solid var(--border2)', background: 'transparent', color: 'var(--muted)' }}>
                 ← Upload a different song
@@ -282,6 +296,21 @@ export default function Home() {
                 <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>Preview</span>
                 <span className="text-sm font-medium">{PLATFORM_LABELS[platform]}</span>
                 <div className="ml-auto">
+                  <button
+                    onClick={() => {
+                      if (!audioRef.current) return
+                      if (audioRef.current.paused) {
+                        audioRef.current.play()
+                        setIsPlaying(true)
+                      } else {
+                        audioRef.current.pause()
+                        setIsPlaying(false)
+                      }
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-lg transition-all mr-2"
+                    style={{ border: '1px solid var(--border2)', color: 'var(--text)', background: 'transparent' }}>
+                    {isPlaying ? '⏸ Pause song' : '▶ Play song'}
+                  </button>
                   <button
                     onClick={() => {
                       const canvas = document.getElementById('thumbCanvas') as HTMLCanvasElement
@@ -297,6 +326,11 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+              {analyzeMode === 'fallback' && (
+                <div className="mx-5 mt-3 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(250,204,21,0.12)', border: '1px solid rgba(250,204,21,0.35)', color: '#fde68a' }}>
+                  Running in demo mode (no AI key configured). Add <code>ANTHROPIC_API_KEY</code> for fully AI-generated outputs.
+                </div>
+              )}
               <div className="flex-1 flex items-center justify-center p-6 overflow-hidden">
                 <ThumbnailCanvas
                   songInfo={songInfo!}
@@ -305,6 +339,7 @@ export default function Home() {
                   profilePhoto={profilePhoto}
                   handle={handle}
                   audioRef={audioRef}
+                  currentTime={currentTime}
                 />
               </div>
             </div>
@@ -313,6 +348,7 @@ export default function Home() {
             <div className="overflow-y-auto p-4 flex flex-col gap-4" style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}>
               <CaptionBox
                 caption={songInfo?.platforms?.[platform] || songInfo?.caption || ''}
+                socialPack={songInfo?.socialPack?.[platform]}
                 onRegenerate={handleRegenCaption}
                 platform={platform}
               />
@@ -331,7 +367,12 @@ export default function Home() {
         )}
       </main>
 
-      <audio ref={audioRef} style={{ display: 'none' }} />
+      <audio
+        ref={audioRef}
+        style={{ display: 'none' }}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onEnded={() => setIsPlaying(false)}
+      />
     </div>
   )
 }
