@@ -33,6 +33,24 @@ Railway gives you a live URL like `lyricflow-production.up.railway.app`
 
 ---
 
+## Super-simple publish (non-technical)
+
+If GitHub/Railway says repo is empty or branch missing, run one command from this project folder:
+
+```bash
+./scripts/publish-to-github.sh https://github.com/aividhyarthi/devloktelugu.git "first deploy"
+```
+
+This script automatically:
+- commits your current changes,
+- renames branch to `main`,
+- connects `origin` to your GitHub repo,
+- pushes branch `main`.
+
+Then in Railway choose repo `aividhyarthi/devloktelugu` and branch `main`.
+
+---
+
 ## Zero-code quick use
 
 1. Open the app in browser.
