@@ -5,10 +5,12 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { filename, captionLanguage } = body
+    const formData = await req.formData()
+    const filename = String(formData.get('filename') || '')
+    const captionLanguage = String(formData.get('captionLanguage') || 'auto')
+    const file = formData.get('songFile') as File | null
 
-    if (!filename) {
+    if (!filename && !file?.name) {
       return NextResponse.json({ error: 'filename is required' }, { status: 400 })
     }
 
@@ -23,24 +25,28 @@ export async function POST(req: NextRequest) {
       en: 'English',
       ar: 'Arabic',
     }
+
+    const cleanName = (filename || file?.name || '')
+      .replace(/\.[^.]+$/, '')
+      .replace(/[-_]/g, ' ')
+      .trim()
+
     const clLabel = langLabels[captionLanguage] || "the song's detected language"
 
-    const cleanName = filename.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')
+    const prompt = `You are a music content expert for social media. Analyse this song name: "${cleanName}".
+Return realistic metadata and social copy in the right language.
 
-    const prompt = `You are a music content expert for social media. Analyse this song filename: "${cleanName}"
+Rules:
+1) songName: clean, user-facing song title.
+2) language + languageCode (te/hi/ta/kn/ml/mr/en/ar).
+3) genre + mood + artist (artist may be empty if unknown).
+4) lyrics: 10 to 14 lines in the SONG language and script.
+5) timedLyrics: array aligned to 45-90s short-video pacing. Each item = {"time": seconds_from_start, "text": lyric_line}.
+6) caption: primary caption in ${clLabel}.
+7) platforms: tailored caption for reels/shorts/post/twitter in same language.
+8) socialPack: for each platform include title, description, hashtags (10-12 tags).
 
-Based on the filename (which usually contains the song title and possibly the language/artist):
-1. songName: Clean properly formatted song name
-2. language: Full language name (e.g. Telugu, Hindi, Tamil)
-3. languageCode: Two-letter code (te/hi/ta/kn/ml/mr/en/ar)
-4. genre: Folk / Classical / Film / Pop / Devotional / Bhajan / Carnatic / etc.
-5. mood: devotional / joyful / melancholic / energetic / romantic / spiritual / etc.
-6. artist: Artist/singer name if guessable from filename, else empty string
-7. lyrics: Array of 8-10 authentic-sounding song lines IN THE SONG'S LANGUAGE using correct native script (Telugu script for Telugu, Devanagari for Hindi, Tamil script for Tamil, etc.)
-8. caption: Social media caption in ${clLabel}. Format: emoji opening line, 2 sentence description, then 10-12 hashtags (mix native language + English)
-9. platforms: Object with keys "reels", "shorts", "post", "twitter" — each with a tailored caption variation (same language, slightly adjusted tone)
-
-Respond ONLY with valid JSON, no markdown fences:
+Return ONLY valid JSON:
 {
   "songName": "",
   "language": "",
@@ -49,18 +55,25 @@ Respond ONLY with valid JSON, no markdown fences:
   "mood": "",
   "artist": "",
   "lyrics": [],
+  "timedLyrics": [{ "time": 0, "text": "" }],
   "caption": "",
   "platforms": {
     "reels": "",
     "shorts": "",
     "post": "",
     "twitter": ""
+  },
+  "socialPack": {
+    "reels": { "title": "", "description": "", "hashtags": [] },
+    "shorts": { "title": "", "description": "", "hashtags": [] },
+    "post": { "title": "", "description": "", "hashtags": [] },
+    "twitter": { "title": "", "description": "", "hashtags": [] }
   }
 }`
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1800,
+      max_tokens: 2200,
       messages: [{ role: 'user', content: prompt }],
     })
 

@@ -16,8 +16,10 @@ export type SongInfo = {
   mood: string
   artist: string
   lyrics: string[]
+  timedLyrics?: Array<{ time: number; text: string }>
   caption: string
   platforms: Record<string, string>
+  socialPack?: Record<string, { title: string; description: string; hashtags: string[] }>
 }
 
 export type Platform = 'reels' | 'shorts' | 'post' | 'twitter'
@@ -39,6 +41,8 @@ export default function Home() {
   const [songInfo, setSongInfo] = useState<SongInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [currentTime, setCurrentTime] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
   const [step, setStep] = useState<'upload' | 'result'>('upload')
   const audioRef = useRef<HTMLAudioElement>(null)
 
@@ -47,6 +51,8 @@ export default function Home() {
     setError('')
     setSongInfo(null)
     setStep('upload')
+    setCurrentTime(0)
+    setIsPlaying(false)
     if (audioRef.current) {
       audioRef.current.src = URL.createObjectURL(f)
       audioRef.current.load()
@@ -60,8 +66,13 @@ export default function Home() {
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, captionLanguage: captionLang }),
+        body: (() => {
+          const form = new FormData()
+          form.append('songFile', file)
+          form.append('filename', file.name)
+          form.append('captionLanguage', captionLang)
+          return form
+        })(),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to analyse')
@@ -284,6 +295,21 @@ export default function Home() {
                 <div className="ml-auto">
                   <button
                     onClick={() => {
+                      if (!audioRef.current) return
+                      if (audioRef.current.paused) {
+                        audioRef.current.play()
+                        setIsPlaying(true)
+                      } else {
+                        audioRef.current.pause()
+                        setIsPlaying(false)
+                      }
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-lg transition-all mr-2"
+                    style={{ border: '1px solid var(--border2)', color: 'var(--text)', background: 'transparent' }}>
+                    {isPlaying ? '⏸ Pause song' : '▶ Play song'}
+                  </button>
+                  <button
+                    onClick={() => {
                       const canvas = document.getElementById('thumbCanvas') as HTMLCanvasElement
                       if (!canvas) return
                       const a = document.createElement('a')
@@ -305,6 +331,7 @@ export default function Home() {
                   profilePhoto={profilePhoto}
                   handle={handle}
                   audioRef={audioRef}
+                  currentTime={currentTime}
                 />
               </div>
             </div>
@@ -313,6 +340,7 @@ export default function Home() {
             <div className="overflow-y-auto p-4 flex flex-col gap-4" style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}>
               <CaptionBox
                 caption={songInfo?.platforms?.[platform] || songInfo?.caption || ''}
+                socialPack={songInfo?.socialPack?.[platform]}
                 onRegenerate={handleRegenCaption}
                 platform={platform}
               />
@@ -331,7 +359,12 @@ export default function Home() {
         )}
       </main>
 
-      <audio ref={audioRef} style={{ display: 'none' }} />
+      <audio
+        ref={audioRef}
+        style={{ display: 'none' }}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onEnded={() => setIsPlaying(false)}
+      />
     </div>
   )
 }
